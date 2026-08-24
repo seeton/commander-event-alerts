@@ -1,5 +1,32 @@
 {
-  "version": 1,
-  "seen": {}
+  "seen": {
+    "0e843d3a9f18a5fcb70b": {
+      "date_text": "2026年09月23日 10時",
+      "kind": "event",
+      "location": "TC 東京",
+      "seen_at": "2026-08-24T07:45:27+00:00",
+      "source": "晴れる屋イベント検索",
+      "title": "コマンダーサミット[予約可]",
+      "url": "https://www.hareruyamtg.com/ja/events/627701/detail"
+    },
+    "594703e7569aa49e4a22": {
+      "date_text": "2026年10月3日（土）- 10月4日（日）",
+      "kind": "event",
+      "location": "横浜",
+      "seen_at": "2026-08-24T07:45:27+00:00",
+      "source": "プレイヤーズコンベンション公式",
+      "title": "プレイヤーズコンベンション横浜2026：コマンドゾーン",
+      "url": "https://ssl.bigmagic.net/players_convention/commandzone"
+    },
+    "93fde4b8b645e8dbb2a3": {
+      "date_text": "2026年08月30日 09時",
+      "kind": "event",
+      "location": "外部会場",
+      "seen_at": "2026-08-24T07:45:27+00:00",
+      "source": "晴れる屋イベント検索",
+      "title": "コマンドフェスト2026 横浜",
+      "url": "https://www.hareruyamtg.com/ja/events/611581/detail"
+    }
+  },
+  "version": 1
 }
-
