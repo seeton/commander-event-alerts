@@ -2,8 +2,8 @@ name: Commander Event Alert
 
 on:
   schedule:
-    # GitHub Actions uses UTC. 21:15 UTC is 06:15 JST the next morning.
-    - cron: "15 21 * * *"
+    # GitHub Actions uses UTC. 00:15 UTC is 09:15 JST on the first day of the month.
+    - cron: "15 0 1 * *"
   workflow_dispatch:
     inputs:
       test_email:
