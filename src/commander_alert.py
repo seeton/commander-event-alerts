@@ -404,12 +404,13 @@ def smtp_settings() -> dict:
     missing = [name for name in required if not os.getenv(name)]
     if missing:
         raise RuntimeError("GitHub Secrets が未設定です: " + ", ".join(missing))
+    user = os.environ["SMTP_USER"]
     return {
-        "host": os.getenv("SMTP_HOST", "smtp.gmail.com"),
-        "port": int(os.getenv("SMTP_PORT", "465")),
-        "user": os.environ["SMTP_USER"],
+        "host": os.getenv("SMTP_HOST") or "smtp.gmail.com",
+        "port": int(os.getenv("SMTP_PORT") or "465"),
+        "user": user,
         "password": os.environ["SMTP_PASSWORD"],
-        "sender": os.getenv("MAIL_FROM", os.environ["SMTP_USER"]),
+        "sender": os.getenv("MAIL_FROM") or user,
         "recipients": [value.strip() for value in os.environ["MAIL_TO"].split(",") if value.strip()],
     }
 
