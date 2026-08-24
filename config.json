@@ -1,0 +1,29 @@
+{
+  "hareruya_search_terms": [
+    "コマンドフェスト",
+    "コマンダーサミット",
+    "コマサミサーガ",
+    "コマンドゾーン"
+  ],
+  "include_terms": [
+    "コマンドフェスト",
+    "commandfest",
+    "command fest",
+    "コマンダーサミット",
+    "コマサミ",
+    "コマンドゾーン",
+    "command zone"
+  ],
+  "exclude_terms": [
+    "参加レポ",
+    "開催レポ",
+    "イベントレポ",
+    "レポート",
+    "振り返り",
+    "結果発表"
+  ],
+  "mtg_jp_topic_pages": 3,
+  "article_max_age_days": 60,
+  "players_convention_url": "https://ssl.bigmagic.net/players_convention/"
+}
+

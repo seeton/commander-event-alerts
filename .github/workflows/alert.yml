@@ -1,0 +1,70 @@
+name: Commander Event Alert
+
+on:
+  schedule:
+    # GitHub Actions uses UTC. 21:15 UTC is 06:15 JST the next morning.
+    - cron: "15 21 * * *"
+  workflow_dispatch:
+    inputs:
+      test_email:
+        description: Send only a test email
+        type: boolean
+        default: false
+
+concurrency:
+  group: commander-event-alert
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  alert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Run tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Send test email
+        if: ${{ inputs.test_email == true }}
+        run: python src/commander_alert.py --test-email
+        env:
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+
+      - name: Check events and send new listings
+        if: ${{ inputs.test_email != true }}
+        run: python src/commander_alert.py --send
+        env:
+          SMTP_HOST: ${{ vars.SMTP_HOST }}
+          SMTP_PORT: ${{ vars.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          MAIL_FROM: ${{ secrets.MAIL_FROM }}
+
+      - name: Save notification history
+        if: ${{ inputs.test_email != true }}
+        run: |
+          if git diff --quiet -- data/seen.json; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/seen.json
+          git commit -m "chore: record notified Commander events"
+          git push
+
