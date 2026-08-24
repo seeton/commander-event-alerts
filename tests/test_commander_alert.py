@@ -91,20 +91,17 @@ class CommanderAlertTests(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].title, "コマンドフェスト2026 横浜")
 
-    def test_empty_optional_smtp_values_use_gmail_defaults(self):
+    def test_resend_settings_use_restricted_testing_sender(self):
         environment = {
-            "SMTP_USER": "sender@example.com",
-            "SMTP_PASSWORD": "secret",
+            "RESEND_API_KEY": "re_secret",
             "MAIL_TO": "receiver@example.com",
-            "SMTP_HOST": "",
-            "SMTP_PORT": "",
-            "MAIL_FROM": "",
+            "RESEND_FROM": "",
         }
         with patch.dict(os.environ, environment, clear=True):
-            settings = alert.smtp_settings()
-        self.assertEqual(settings["host"], "smtp.gmail.com")
-        self.assertEqual(settings["port"], 465)
-        self.assertEqual(settings["sender"], "sender@example.com")
+            settings = alert.resend_settings()
+        self.assertEqual(settings["api_key"], "re_secret")
+        self.assertEqual(settings["sender"], "Commander Events <onboarding@resend.dev>")
+        self.assertEqual(settings["recipients"], ["receiver@example.com"])
 
 
 if __name__ == "__main__":

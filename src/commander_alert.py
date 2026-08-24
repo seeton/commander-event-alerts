@@ -9,12 +9,9 @@ import html
 import json
 import os
 import re
-import smtplib
-import ssl
 import sys
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta, timezone
-from email.message import EmailMessage
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Iterable
@@ -399,41 +396,52 @@ def render_html(events: list[Event]) -> str:
     )
 
 
-def smtp_settings() -> dict:
-    required = ("SMTP_USER", "SMTP_PASSWORD", "MAIL_TO")
+def resend_settings() -> dict:
+    required = ("RESEND_API_KEY", "MAIL_TO")
     missing = [name for name in required if not os.getenv(name)]
     if missing:
         raise RuntimeError("GitHub Secrets が未設定です: " + ", ".join(missing))
-    user = os.environ["SMTP_USER"]
     return {
-        "host": os.getenv("SMTP_HOST") or "smtp.gmail.com",
-        "port": int(os.getenv("SMTP_PORT") or "465"),
-        "user": user,
-        "password": os.environ["SMTP_PASSWORD"],
-        "sender": os.getenv("MAIL_FROM") or user,
+        "api_key": os.environ["RESEND_API_KEY"],
+        # resend.dev may send only to the email belonging to this Resend
+        # account. That is exactly the single-recipient use case here.
+        "sender": os.getenv("RESEND_FROM") or "Commander Events <onboarding@resend.dev>",
         "recipients": [value.strip() for value in os.environ["MAIL_TO"].split(",") if value.strip()],
     }
 
 
 def send_message(subject: str, text_body: str, html_body: str) -> None:
-    settings = smtp_settings()
-    message = EmailMessage()
-    message["Subject"] = subject
-    message["From"] = settings["sender"]
-    message["To"] = ", ".join(settings["recipients"])
-    message.set_content(text_body)
-    message.add_alternative(html_body, subtype="html")
-
-    context = ssl.create_default_context()
-    if settings["port"] == 465:
-        with smtplib.SMTP_SSL(settings["host"], settings["port"], context=context) as smtp:
-            smtp.login(settings["user"], settings["password"])
-            smtp.send_message(message)
-    else:
-        with smtplib.SMTP(settings["host"], settings["port"]) as smtp:
-            smtp.starttls(context=context)
-            smtp.login(settings["user"], settings["password"])
-            smtp.send_message(message)
+    settings = resend_settings()
+    payload = json.dumps(
+        {
+            "from": settings["sender"],
+            "to": settings["recipients"],
+            "subject": subject,
+            "text": text_body,
+            "html": html_body,
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+    request = Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {settings['api_key']}",
+            "Content-Type": "application/json",
+            "User-Agent": USER_AGENT,
+        },
+    )
+    try:
+        with urlopen(request, timeout=25) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"Resend API の送信に失敗しました: HTTP {exc.code} {detail}") from exc
+    except (URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Resend API の送信に失敗しました: {exc}") from exc
+    if not result.get("id"):
+        raise RuntimeError(f"Resend API から送信IDが返りませんでした: {result}")
 
 
 def discover(config: dict) -> tuple[list[Event], list[str]]:

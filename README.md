@@ -10,19 +10,18 @@
 
 毎週の店舗イベント、コマンダー交流会、コマンダー・パーティー、開催後のレポートは通知しません。情報元は晴れる屋イベント検索、マジック日本公式のコマンダー記事、プレイヤーズコンベンション公式です。
 
-## セットアップ（Gmail の場合）
+## セットアップ（Resend）
 
-リポジトリの **Settings → Secrets and variables → Actions** で、Repository secrets に次を登録します。
+個人メールのSMTPアカウントは使用しません。通知専用の [Resend](https://resend.com/) APIを利用します。無料枠は月3,000通・1日100通です。
+
+Resendのアカウントメールと通知先を同じアドレスにすれば、独自ドメインなしで `onboarding@resend.dev` から送信できます。Resendで送信専用権限のAPIキーを作成し、リポジトリの **Settings → Secrets and variables → Actions** で次をRepository secretsに登録します。
 
 | Secret | 値 |
 |---|---|
-| `SMTP_USER` | 送信に使う Gmail アドレス |
-| `SMTP_PASSWORD` | Google アカウントで発行した16桁のアプリ パスワード |
+| `RESEND_API_KEY` | `re_` で始まる送信専用APIキー |
 | `MAIL_TO` | 通知を受け取るメールアドレス（複数ならカンマ区切り） |
 
-Gmail の通常のログインパスワードは使用しません。Google アカウントで2段階認証を有効にして、`アプリ パスワード`を発行してください。
-
-Gmail 以外を使う場合は Repository variables に `SMTP_HOST` と `SMTP_PORT` を追加します。既定値は `smtp.gmail.com` と `465`（SSL）です。必要なら Repository secret の `MAIL_FROM` も設定できます。
+APIキーはコードやログには出力されません。独自ドメインを追加した場合だけ、任意で `RESEND_FROM` もRepository secretに設定できます。
 
 ## 動作確認
 
@@ -45,5 +44,4 @@ python3 -m unittest discover -s tests -v
 
 ## 仕組み
 
-外部パッケージや有料APIは使いません。公式ページを取得して固有イベント名で絞り込み、URL・タイトル・開催日の組み合わせを通知IDにします。GitHub Actions が通知履歴をコミットするため、ランナーが毎回新しくなっても重複通知を防げます。
-
+外部パッケージや有料APIは使いません。公式ページを取得して固有イベント名で絞り込み、URL・タイトル・開催日の組み合わせを通知IDにします。メール送信にはResendの無料APIを使います。GitHub Actions が通知履歴をコミットするため、ランナーが毎回新しくなっても重複通知を防げます。
