@@ -91,6 +91,18 @@ class CommanderAlertTests(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].title, "コマンドフェスト2026 横浜")
 
+    def test_upcoming_event_is_in_every_month_until_it_happens(self):
+        event = alert.Event(
+            "コマンドフェスト2026 東京",
+            "https://example.test/commandfest",
+            "公式",
+            "2026年10月10日 09時",
+        )
+        for digest_date in (date(2026, 8, 1), date(2026, 9, 1), date(2026, 10, 1)):
+            with self.subTest(digest_date=digest_date):
+                self.assertEqual(alert.upcoming_events([event], digest_date), [event])
+        self.assertEqual(alert.upcoming_events([event], date(2026, 10, 11)), [])
+
     def test_resend_settings_use_restricted_testing_sender(self):
         environment = {
             "RESEND_API_KEY": "re_secret",

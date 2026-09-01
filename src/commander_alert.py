@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Find large Japanese Commander events and send one email per new listing."""
+"""Find upcoming large Japanese Commander events and send a monthly digest."""
 
 from __future__ import annotations
 
@@ -199,8 +199,6 @@ def discover_hareruya(config: dict) -> list[Event]:
             if not accepted(link.text, config):
                 continue
             event_date = first_date(link.text)
-            if (day := parsed_date(event_date)) and day < date.today() - timedelta(days=1):
-                continue
             title = from_first_include_term(link.text, config)
             without_date = normalize(link.text.replace(event_date, "", 1))
             location_match = re.search(r"^(.+?)\s+(?:統率者|コマンダー)", without_date)
@@ -289,8 +287,6 @@ def discover_players_convention(config: dict) -> list[Event]:
     city_match = re.search(r"プレイヤーズコンベンション(.+?)(?:20\d{2}|：|$)", title)
     location = normalize(city_match.group(1)) if city_match else ""
 
-    if (day := parsed_date(date_text)) and day < date.today() - timedelta(days=1):
-        return []
     return [
         Event(
             title=title,
@@ -327,32 +323,29 @@ def deduplicate(events: Iterable[Event]) -> list[Event]:
     return sorted(unique.values(), key=lambda item: (item.date_text, item.title))
 
 
+def upcoming_events(events: Iterable[Event], on_date: date | None = None) -> list[Event]:
+    """Keep events scheduled for the digest date or later.
+
+    Announcements and events without a parseable date remain eligible because
+    their source-specific discovery window is the only reliable expiry signal.
+    """
+    on_date = on_date or date.today()
+    upcoming = []
+    for event in events:
+        event_day = parsed_date(event.date_text) if event.kind == "event" else None
+        if event_day is not None and event_day < on_date:
+            continue
+        upcoming.append(event)
+    return upcoming
+
+
 def load_json(path: Path) -> dict:
     with path.open(encoding="utf-8") as handle:
         return json.load(handle)
 
 
-def load_state(path: Path) -> dict:
-    if not path.exists():
-        return {"version": 1, "seen": {}}
-    state = load_json(path)
-    if state.get("version") != 1 or not isinstance(state.get("seen"), dict):
-        raise ValueError(f"未対応の状態ファイルです: {path}")
-    return state
-
-
-def save_state(path: Path, state: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    temporary.replace(path)
-
-
 def render_text(events: list[Event]) -> str:
-    lines = ["大規模な統率者イベントの新着情報です。", ""]
+    lines = ["今後開催予定の大規模な統率者イベントです。", ""]
     for event in events:
         lines.append(f"■ {event.title}")
         if event.date_text:
@@ -388,8 +381,8 @@ def render_html(events: list[Event]) -> str:
     return (
         '<!doctype html><html lang="ja"><body style="font-family:sans-serif;'
         'max-width:680px;margin:24px auto;color:#222">'
-        "<h1 style=\"font-size:22px\">大規模統率者イベントの新着</h1>"
-        "<p>新しく見つかった開催情報だけをお知らせします。</p>"
+        "<h1 style=\"font-size:22px\">今後の大規模統率者イベント</h1>"
+        "<p>開催前の対象イベントを月初に毎回お知らせします。</p>"
         + "".join(cards)
         + '<p style="color:#777;font-size:12px">commander-event-alerts / GitHub Actions</p>'
         "</body></html>"
@@ -459,14 +452,13 @@ def discover(config: dict) -> tuple[list[Event], list[str]]:
             print(f"{name}: {len(found)}件", file=sys.stderr)
         except Exception as exc:  # Keep other independent sources useful.
             errors.append(f"{name}: {exc}")
-    return deduplicate(events), errors
+    return upcoming_events(deduplicate(events)), errors
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, default=Path("config.json"))
-    parser.add_argument("--state", type=Path, default=Path("data/seen.json"))
-    parser.add_argument("--send", action="store_true", help="新着メールを送り、状態を保存する")
+    parser.add_argument("--send", action="store_true", help="開催予定イベントの月次メールを送る")
     parser.add_argument("--test-email", action="store_true", help="疎通確認メールだけを送る")
     args = parser.parse_args(argv)
 
@@ -488,27 +480,21 @@ def main(argv: list[str] | None = None) -> int:
         print("すべての情報元の取得に失敗しました", file=sys.stderr)
         return 1
 
-    state = load_state(args.state)
-    new_events = [event for event in events if event.event_id not in state["seen"]]
-    print(json.dumps([asdict(event) for event in new_events], ensure_ascii=False, indent=2))
+    print(json.dumps([asdict(event) for event in events], ensure_ascii=False, indent=2))
 
     if not args.send:
-        print(f"dry-run: 全{len(events)}件 / 新着{len(new_events)}件", file=sys.stderr)
+        print(f"dry-run: 開催予定{len(events)}件", file=sys.stderr)
         return 0
-    if not new_events:
-        print("新着はありません")
+    if not events:
+        print("開催予定の対象イベントはありません")
         return 0
 
     send_message(
-        f"[統率者イベント通知] 新着{len(new_events)}件",
-        render_text(new_events),
-        render_html(new_events),
+        f"[統率者イベント通知] 開催予定{len(events)}件",
+        render_text(events),
+        render_html(events),
     )
-    seen_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    for event in new_events:
-        state["seen"][event.event_id] = {**asdict(event), "seen_at": seen_at}
-    save_state(args.state, state)
-    print(f"新着{len(new_events)}件をメールし、状態を保存しました")
+    print(f"開催予定{len(events)}件をメールしました")
     return 0
 
 
