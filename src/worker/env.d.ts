@@ -1,6 +1,7 @@
 declare namespace Cloudflare {
   interface Env {
-    BUTTONDOWN_API_KEY: string;
+    SMTP_PASSWORD: string;
+    TOKEN_SECRET: string;
     ADMIN_TOKEN: string;
   }
 }

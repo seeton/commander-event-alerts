@@ -1,0 +1,24 @@
+name: Monthly newsletter
+on:
+  schedule:
+    - cron: '15 0 1 * *' # 09:15 JST on the first day of each month
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: monthly-newsletter
+  cancel-in-progress: false
+jobs:
+  deliver:
+    if: vars.DELIVERY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: node scripts/monthly.mjs
+        env:
+          ALERTS_ORIGIN: https://commander-event-alerts.asaiwing1104.workers.dev
+          ALERTS_ADMIN_TOKEN: ${{ secrets.ALERTS_ADMIN_TOKEN }}

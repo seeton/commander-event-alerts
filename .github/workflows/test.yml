@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - "src/**"
+      - "scripts/**"
+      - "migrations/**"
       - "test/**"
       - "config.json"
       - "package.json"

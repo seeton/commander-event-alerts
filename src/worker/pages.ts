@@ -1,13 +1,12 @@
 export function landingPage(options: {
   appName: string;
-  buttondownUsername: string;
   enabled: boolean;
 }): string {
   const form = options.enabled
-    ? `<form action="https://buttondown.com/api/emails/embed-subscribe/${encodeURIComponent(options.buttondownUsername)}" method="post">
+    ? `<form action="/api/subscribe" method="post">
         <label for="email">通知先メールアドレス</label>
         <div class="row"><input id="email" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" placeholder="you@example.com" required><button type="submit">無料で購読</button></div>
-        <input type="hidden" name="embed" value="1">
+        <div style="position:absolute;left:-10000px" aria-hidden="true"><label>Webサイト<input name="website" tabindex="-1" autocomplete="off"></label></div>
       </form>`
     : `<div class="preparing"><strong>ただいま公開準備中です。</strong><br>購読受付の開始まで、もう少しお待ちください。</div>`;
   return `<!doctype html>
@@ -20,11 +19,15 @@ export function landingPage(options: {
 }
 
 export function privacyPage(appName: string): string {
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>プライバシー | ${escapeHtml(appName)}</title><style>${styles}</style></head><body><main class="document"><a href="/">← 戻る</a><h1>プライバシーについて</h1><p>本サービスは、購読確認とイベント通知のためにメールアドレスを取り扱います。</p><h2>保存と利用</h2><ul><li>メールアドレス、購読確認、配信停止状態は、メール配信事業者Buttondownで管理します。</li><li>イベント通知、購読確認、配信停止のためにのみ利用します。</li><li>メールアドレスを公開GitHubリポジトリやCloudflareへ保存しません。フォームからButtondownへ直接送信します。</li><li>独自の開封・クリック計測は行いません。各事業者が運用・不正防止のためにアクセス情報を処理する場合があります。</li></ul><h2>配信停止</h2><p>各月次メール末尾の「配信停止」リンクから、いつでも解除できます。</p><h2>外部サービス</h2><p>ページ配信にCloudflare、購読確認・配信停止・メール配信にButtondownを利用します。<a href="https://buttondown.com/legal/privacy">Buttondownのプライバシーポリシー</a>もご確認ください。</p><h2>連絡先</h2><p>不具合・プライバシーに関する連絡は、個人情報を含めず<a href="https://github.com/seeton/commander-event-alerts/issues">GitHub Issues</a>へお願いします。</p></main></body></html>`;
+  return messagePage('プライバシーについて', `${appName}は購読確認とイベント通知のためにメールアドレスを利用します。メールアドレス・購読状態・送信履歴はCloudflare D1で管理し、XREA経由で送信します。公開GitHubや他の購読者にアドレスを公開しません。GitHub Actionsは宛先を取得せず、配信処理の実行と結果件数だけを扱います。配信停止時には稼働中データベースからメールアドレスを削除します。バックアップやXREAの配送ログには各事業者の保管期間中残る場合があります。未確認の登録は期限切れ後に削除します。迷惑登録防止のためIPアドレスとメールアドレスの鍵付きハッシュを短期間保存します。開封・クリック計測は行いません。連絡は受信メールへの返信でお願いします。GitHub Issuesに個人情報は書かないでください。`);
+}
+
+export function messagePage(title: string, message: string, action?: {path: string; token: string; label: string}): string {
+  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${escapeHtml(title)}</title><style>${styles}</style></head><body><main class="document"><a href="/">← トップへ</a><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p>${action ? `<form method="post" action="${escapeHtml(action.path)}"><input type="hidden" name="token" value="${escapeHtml(action.token)}"><button type="submit">${escapeHtml(action.label)}</button></form>` : ''}</main></body></html>`;
 }
 
 const styles = `:root{color-scheme:light;--ink:#201d19;--muted:#6f685f;--paper:#f5f0e6;--card:#fffdf8;--accent:#a46224;--line:#d9d0c3}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Yu Gothic UI",sans-serif;line-height:1.7}main{max-width:1040px;margin:auto;padding:72px 24px 44px}.hero{max-width:790px}.eyebrow{color:var(--accent);font-size:12px;font-weight:800;letter-spacing:.17em}h1{margin:14px 0 20px;font-family:Georgia,"Yu Mincho",serif;font-size:clamp(38px,7vw,72px);line-height:1.12;letter-spacing:-.035em}h1 span{color:var(--accent)}.lead{max-width:720px;font-size:18px;color:var(--muted)}form{margin:34px 0 14px;padding:22px;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 40px #59432310}label{display:block;margin-bottom:8px;font-weight:750}.row{display:flex;gap:10px}input{min-width:0;flex:1;padding:14px 15px;border:1px solid #b9afa1;border-radius:9px;background:#fff;font:inherit}button{padding:14px 22px;border:0;border-radius:9px;background:var(--ink);color:white;font:inherit;font-weight:750;cursor:pointer}.fine{font-size:13px;color:var(--muted)}.preparing{margin:34px 0 14px;padding:22px;background:#fff5d8;border:1px solid #e8c879;border-radius:14px}.how{margin-top:90px}.how h2,.example h2,.document h2{font-family:Georgia,"Yu Mincho",serif;font-size:28px}.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.steps article,.example{padding:24px;background:var(--card);border:1px solid var(--line);border-radius:14px}.steps b{color:var(--accent);font-family:Georgia,serif}.steps h3{margin:6px 0}.steps p{margin:0;color:var(--muted)}.example{margin:48px 0}.example h2{margin-top:0}.example p{font-size:18px;margin-bottom:0}footer{display:flex;gap:24px;justify-content:space-between;max-width:1040px;margin:auto;padding:30px 24px 50px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}a{color:var(--accent)}.document{max-width:760px}.document h1{font-size:46px}.document p,.document li{color:#4f4941}@media(max-width:720px){main{padding-top:48px}.steps{grid-template-columns:1fr}.row{display:block}.row button{width:100%;margin-top:10px}footer{display:block}footer span{display:block;margin-top:10px}}`;
 
 function escapeHtml(value: string): string {
-  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }

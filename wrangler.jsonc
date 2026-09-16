@@ -3,23 +3,28 @@
   "name": "commander-event-alerts",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-09-16",
+  "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "vars": {
     "APP_NAME": "統率者大型大会アラート",
     "SERVICE_ENABLED": "false",
-    "BUTTONDOWN_USERNAME": "commander-events-jp"
+    "PUBLIC_ORIGIN": "https://commander-event-alerts.asaiwing1104.workers.dev",
+    "SMTP_HOST": "s323.xrea.com",
+    "SMTP_USER": "info@setn.shop",
+    "SMTP_FROM": "info@setn.shop"
   },
-  "triggers": {
-    "crons": ["15 0 1 * *"]
-  },
+  "d1_databases": [{"binding":"DB", "database_name":"commander-event-alerts", "migrations_dir":"migrations"}],
+  "triggers": {"crons":["27 18 * * *"]},
   "observability": {
     "enabled": true,
+    "redact_query_string": true,
     "logs": {
       "enabled": true,
+      "invocation_logs": false,
       "head_sampling_rate": 1
     },
     "traces": {
-      "enabled": true,
+      "enabled": false,
       "head_sampling_rate": 0.05
     }
   }

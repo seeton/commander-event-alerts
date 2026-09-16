@@ -1,126 +1,101 @@
-import { discoverAll, type EventInfo } from "./discovery";
-import { buttondownConfig, sendMonthlyNewsletter } from "./buttondown";
-import { landingPage, privacyPage } from "./pages";
-import { constantTimeEqual } from "./security";
+import { connect } from 'cloudflare:sockets';
+import { discoverAll } from './discovery';
+import { landingPage, privacyPage, messagePage } from './pages';
+import { constantTimeEqual } from './security';
+import { sendSmtp, type SendMail, SmtpError } from './smtp';
+import { cleanup, subscribe, confirmSubscription, unsubscribe } from './subscriptions';
+import { campaignStatus, jstMonthKey, prepareCampaign, sendNext } from './newsletter';
+import { readLimitedText } from './http';
 
-const JSON_HEADERS = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
+export function mailer(env: Cloudflare.Env): SendMail {
+  return mail => sendSmtp({host:env.SMTP_HOST,user:env.SMTP_USER,password:env.SMTP_PASSWORD,from:env.SMTP_FROM,name:env.APP_NAME}, mail,
+    host => connect({hostname:host,port:465}, {secureTransport:'on',allowHalfOpen:false}));
+}
+
+function ready(env: Cloudflare.Env): boolean {
+  return String(env.SERVICE_ENABLED)==='true' && Boolean(env.SMTP_PASSWORD && env.TOKEN_SECRET?.length >= 32 && env.DB);
+}
 
 export default {
-  async fetch(request, env, ctx): Promise<Response> {
+  // Housekeeping only: this daily trigger never sends email.
+  async scheduled(_controller, env): Promise<void> { await cleanup(env.DB); },
+  async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
     try {
-      if (request.method === "GET" && url.pathname === "/") return renderLanding(env);
-      if (request.method === "GET" && url.pathname === "/privacy") return html(privacyPage(env.APP_NAME));
-      if (request.method === "GET" && url.pathname === "/healthz") {
-        return json({ ok: true, acceptingSubscriptions: subscriptionReady(env) });
+      if (request.method==='GET' && url.pathname==='/') return html(landingPage({appName:env.APP_NAME,enabled:ready(env)}));
+      if (request.method==='GET' && url.pathname==='/privacy') return html(privacyPage(env.APP_NAME));
+      if (request.method==='GET' && url.pathname==='/healthz') return json({ok:true,acceptingSubscriptions:ready(env)});
+      if (url.pathname.startsWith('/api/admin/')) {
+        const secret = env.ADMIN_TOKEN?.trim();
+        const supplied = request.headers.get('authorization')?.replace(/^Bearer /u,'') ?? '';
+        if (!secret || !supplied || !(await constantTimeEqual(supplied,secret))) return json({message:'Unauthorized'},401);
+        if (request.method==='GET' && url.pathname==='/api/admin/preview') return json(await discoverAll());
+        if (request.method==='GET' && url.pathname==='/api/admin/status') {
+          const month=url.searchParams.get('month') ?? jstMonthKey(new Date());
+          if (!/^20\d{2}-\d{2}$/u.test(month)) return json({message:'Invalid month'},400);
+          return json({month,counts:await campaignStatus(env.DB,month)});
+        }
+        if (!ready(env)) return json({status:'disabled'},503);
+        if (request.method==='POST' && url.pathname==='/api/admin/prepare') {
+          await cleanup(env.DB);
+          const discovery=await discoverAll();
+          return json({...await prepareCampaign(env,discovery.events),eventCount:discovery.events.length,failures:discovery.failures});
+        }
+        if (request.method==='POST' && url.pathname==='/api/admin/send-next') {
+          const month=url.searchParams.get('month') ?? '';
+          if (month!==jstMonthKey(new Date())) return json({message:'Invalid month'},400);
+          return json(await sendNext(env,month,mailer(env)));
+        }
+        return json({message:'Not found'},404);
       }
-      if (request.method === "GET" && url.pathname === "/api/admin/preview") return await adminPreview(request, env);
-      if (request.method === "POST" && url.pathname === "/api/admin/dispatch") return await adminDispatch(request, env);
-      return json({ message: "Not found" }, 404);
+      if (request.method==='GET' && ['/confirm','/unsubscribe'].includes(url.pathname)) {
+        const token=url.searchParams.get('token') ?? '';
+        if (token.length > 150) return json({message:'Invalid token'},400);
+        const confirming=url.pathname==='/confirm';
+        return html(messagePage(confirming?'購読の確認':'配信停止', confirming?'下のボタンで月初のイベント通知を受け取ることに同意し、購読を確定します。':'下のボタンで今後の配信を停止し、登録アドレスを削除します。', {path:url.pathname,token,label:confirming?'購読を確定':'配信を停止'}));
+      }
+      if (request.method==='POST' && ['/api/subscribe','/confirm','/unsubscribe'].includes(url.pathname)) {
+        const form=await readForm(request);
+        const oneClick=url.pathname==='/unsubscribe' && form.get('List-Unsubscribe')==='One-Click';
+        if (!oneClick && request.headers.get('origin')!==env.PUBLIC_ORIGIN) return json({message:'Forbidden'},403);
+        if (url.pathname==='/unsubscribe') {
+          const token=oneClick ? url.searchParams.get('token') ?? '' : form.get('token') ?? '';
+          const ok=await unsubscribe(env.DB,env.TOKEN_SECRET,token);
+          return html(messagePage(ok?'配信を停止しました':'リンクが無効です',ok?'今後の月次メールは配信されません。':'メールに記載されたリンクを確認してください。'),ok?200:400);
+        }
+        // Unsubscribe remains available even when registration/sending is paused.
+        if (!ready(env)) return html(messagePage('公開準備中','現在、購読受付と配信を停止しています。'),503);
+        if (url.pathname==='/confirm') {
+          const ok=await confirmSubscription(env.DB,form.get('token') ?? '');
+          return html(messagePage(ok?'購読を開始しました':'リンクが無効か、確認済みです',ok?'次回の月初から、開催予定の大型イベントをお届けします。':'期限切れの場合はトップページから登録し直してください。'),ok?200:400);
+        }
+        if (!form.get('website')) {
+          await cleanup(env.DB);
+          await subscribe(env,form.get('email') ?? '',request.headers.get('cf-connecting-ip') ?? 'unknown',mailer(env));
+        }
+        return html(messagePage('メールをご確認ください','登録可能な場合、購読確認メールを送信します。迷惑メールも確認してください。既に確認済みの場合、新たなメールは送りません。'));
+      }
+      return json({message:'Not found'},404);
     } catch (error) {
-      console.error(JSON.stringify({ event: "request_error", path: url.pathname, message: safeError(error) }));
-      return json({ message: "処理中にエラーが発生しました。しばらくしてからお試しください。" }, 500);
+      const code=error instanceof SmtpError ? error.code : 'request_failed';
+      console.error(JSON.stringify({event:'request_error',code}));
+      return html(messagePage('処理できませんでした','しばらくしてからお試しください。メールアドレスの形式も確認してください。'),500);
     }
-  },
-
-  async scheduled(controller, env, ctx): Promise<void> {
-    if (String(env.SERVICE_ENABLED) !== "true") {
-      console.log(JSON.stringify({ event: "scheduled_dispatch", status: "disabled" }));
-      return;
-    }
-    ctx.waitUntil(
-      dispatchMonthly(env, new Date(controller.scheduledTime)).then((result) => {
-        console.log(JSON.stringify({ event: "scheduled_dispatch", ...result }));
-      }).catch((error) => {
-        console.error(JSON.stringify({ event: "scheduled_dispatch_error", message: safeError(error) }));
-        throw error;
-      }),
-    );
   },
 } satisfies ExportedHandler<Cloudflare.Env>;
 
-async function adminPreview(request: Request, env: Cloudflare.Env): Promise<Response> {
-  if (!(await authorized(request, env))) return json({ message: "Unauthorized" }, 401);
-  const result = await discoverAll();
-  return json({ count: result.events.length, failures: result.failures, events: result.events });
+async function readForm(request: Request): Promise<URLSearchParams> {
+  if (!request.headers.get('content-type')?.startsWith('application/x-www-form-urlencoded')) throw new Error('unsupported_form');
+  return new URLSearchParams(await readLimitedText(new Response(request.body),4096));
 }
-
-async function adminDispatch(request: Request, env: Cloudflare.Env): Promise<Response> {
-  if (!(await authorized(request, env))) return json({ message: "Unauthorized" }, 401);
-  return json(await dispatchMonthly(env, new Date()));
+function html(body: string,status=200): Response {
+  return new Response(body,{status,headers:{
+    'content-type':'text/html; charset=utf-8','cache-control':'no-store',
+    'content-security-policy':"default-src 'none'; script-src 'none'; connect-src 'none'; frame-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    'referrer-policy':'no-referrer','x-content-type-options':'nosniff','strict-transport-security':'max-age=31536000; includeSubDomains',
+    'permissions-policy':'camera=(), microphone=(), geolocation=()',
+  }});
 }
-
-async function dispatchMonthly(env: Cloudflare.Env, now: Date): Promise<Record<string, unknown>> {
-  const emailConfig = buttondownConfig(env);
-  if (!emailConfig) throw new Error("email delivery is not configured");
-  const discovery = await discoverAll();
-  const digestMonth = jstMonthKey(now);
-  if (discovery.events.length === 0) {
-    return { status: "empty", digestMonth, failures: discovery.failures };
-  }
-  const sent = await sendMonthlyNewsletter(emailConfig, discovery.events, jstMonthLabel(now), digestMonth);
-  if (sent.duplicate) return { status: "skipped", digestMonth, reason: "already exists" };
-  return { status: "queued", digestMonth, eventCount: discovery.events.length, failures: discovery.failures, emailId: sent.id };
+function json(payload:unknown,status=200):Response {
+  return new Response(JSON.stringify(payload),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}});
 }
-
-async function authorized(request: Request, env: Cloudflare.Env): Promise<boolean> {
-  const expected = env.ADMIN_TOKEN?.trim();
-  const header = request.headers.get("authorization") ?? "";
-  const supplied = header.startsWith("Bearer ") ? header.slice(7) : "";
-  return Boolean(expected && supplied && await constantTimeEqual(supplied, expected));
-}
-
-function renderLanding(env: Cloudflare.Env): Response {
-  return html(landingPage({
-    appName: env.APP_NAME,
-    buttondownUsername: env.BUTTONDOWN_USERNAME,
-    enabled: subscriptionReady(env),
-  }));
-}
-
-function subscriptionReady(env: Cloudflare.Env): boolean {
-  return Boolean(
-    String(env.SERVICE_ENABLED) === "true" &&
-    env.BUTTONDOWN_USERNAME?.trim() &&
-    buttondownConfig(env),
-  );
-}
-
-function jstMonthKey(now: Date): string {
-  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit" }).formatToParts(now);
-  const year = parts.find((part) => part.type === "year")?.value;
-  const month = parts.find((part) => part.type === "month")?.value;
-  if (!year || !month) throw new Error("could not determine JST month");
-  return `${year}-${month}`;
-}
-
-function jstMonthLabel(now: Date): string {
-  return new Intl.DateTimeFormat("ja-JP", { timeZone: "Asia/Tokyo", year: "numeric", month: "long" }).format(now);
-}
-
-function html(body: string): Response {
-  return new Response(body, { headers: securityHeaders("text/html; charset=utf-8") });
-}
-
-function securityHeaders(contentType: string): Headers {
-  return new Headers({
-    "content-type": contentType,
-    "cache-control": "public, max-age=300",
-    "content-security-policy": "default-src 'none'; script-src 'none'; connect-src 'none'; frame-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action https://buttondown.com; frame-ancestors 'none'",
-    "referrer-policy": "no-referrer",
-    "permissions-policy": "camera=(), microphone=(), geolocation=()",
-    "x-content-type-options": "nosniff",
-    "strict-transport-security": "max-age=31536000; includeSubDomains",
-  });
-}
-
-function json(payload: unknown, status = 200): Response {
-  return new Response(JSON.stringify(payload), { status, headers: JSON_HEADERS });
-}
-
-function safeError(error: unknown): string {
-  return error instanceof Error ? error.message.slice(0, 500) : "unknown error";
-}
-
-export const testing = { dispatchMonthly, jstMonthKey };
-export type { EventInfo };
