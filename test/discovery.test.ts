@@ -4,6 +4,7 @@ import {
   deduplicate,
   eventDateKey,
   parseLinks,
+  parseOfficialCommandFest,
   upcomingEvents,
   type EventInfo,
 } from "../src/worker/discovery";
@@ -43,6 +44,30 @@ describe("event discovery helpers", () => {
     expect(upcomingEvents([event], "2026-10-01")).toHaveLength(1);
     expect(upcomingEvents([event], "2026-10-10")).toHaveLength(1);
     expect(upcomingEvents([event], "2026-10-11")).toHaveLength(0);
+  });
+
+  it("excludes undated events and publication dates", () => {
+    expect(upcomingEvents([sampleEvent({ dateText: "未定" }), sampleEvent({ kind: "announcement" })], "2026-08-01")).toEqual([]);
+  });
+
+  it("retains a multi-day event through its final day, including a month boundary", () => {
+    const event = sampleEvent({ dateText: "2026年9月30日（水）- 10月1日（木）" });
+    expect(upcomingEvents([event], "2026-10-01")).toHaveLength(1);
+    expect(upcomingEvents([event], "2026-10-02")).toHaveLength(0);
+  });
+
+  it("sorts by calendar date rather than unpadded text", () => {
+    expect(deduplicate([
+      sampleEvent({ url: "https://example.com/18", title: "コマンダーサミット", dateText: "2026年10月18日" }),
+      sampleEvent({ url: "https://example.com/3", title: "コマンダーサミット", dateText: "2026年10月3日" }),
+    ])[0]?.dateText).toBe("2026年10月3日");
+  });
+
+  it("reads the persistent official schedule and carries the year to later dates", () => {
+    const events = parseOfficialCommandFest('<div class="event-dates inner"><h2>- 開催日程 -</h2><p>2026年7月12日（日）大阪、　8月30日（日）横浜</p></div>');
+    expect(events.map((event) => [event.dateText, event.location])).toEqual([["2026年7月12日", "大阪"], ["2026年8月30日", "横浜"]]);
+    expect(upcomingEvents(events, "2026-08-01")).toHaveLength(1);
+    expect(upcomingEvents(events, "2026-09-01")).toHaveLength(0);
   });
 
   it("collapses CommandFest ticket packages into one event", () => {

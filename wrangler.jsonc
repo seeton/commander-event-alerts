@@ -7,7 +7,7 @@
   "vars": {
     "APP_NAME": "統率者大型大会アラート",
     "SERVICE_ENABLED": "false",
-    "BUTTONDOWN_USERNAME": ""
+    "BUTTONDOWN_USERNAME": "commander-events-jp"
   },
   "triggers": {
     "crons": ["15 0 1 * *"]

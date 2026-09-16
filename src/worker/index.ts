@@ -14,8 +14,8 @@ export default {
       if (request.method === "GET" && url.pathname === "/healthz") {
         return json({ ok: true, acceptingSubscriptions: subscriptionReady(env) });
       }
-      if (request.method === "GET" && url.pathname === "/api/admin/preview") return adminPreview(request, env);
-      if (request.method === "POST" && url.pathname === "/api/admin/dispatch") return adminDispatch(request, env);
+      if (request.method === "GET" && url.pathname === "/api/admin/preview") return await adminPreview(request, env);
+      if (request.method === "POST" && url.pathname === "/api/admin/dispatch") return await adminDispatch(request, env);
       return json({ message: "Not found" }, 404);
     } catch (error) {
       console.error(JSON.stringify({ event: "request_error", path: url.pathname, message: safeError(error) }));
@@ -60,7 +60,7 @@ async function dispatchMonthly(env: Cloudflare.Env, now: Date): Promise<Record<s
   }
   const sent = await sendMonthlyNewsletter(emailConfig, discovery.events, jstMonthLabel(now), digestMonth);
   if (sent.duplicate) return { status: "skipped", digestMonth, reason: "already exists" };
-  return { status: "sent", digestMonth, eventCount: discovery.events.length, failures: discovery.failures, emailId: sent.id };
+  return { status: "queued", digestMonth, eventCount: discovery.events.length, failures: discovery.failures, emailId: sent.id };
 }
 
 async function authorized(request: Request, env: Cloudflare.Env): Promise<boolean> {

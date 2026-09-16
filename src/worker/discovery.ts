@@ -1,8 +1,9 @@
 import rawConfig from "../../config.json";
+import { readLimitedText } from "./http";
 
 const HARERUYA_SEARCH =
   "https://www.hareruyamtg.com/ja/events/list?formats%5B%5D=7&isHoliday=true&isWeekday=true&term=";
-const MTG_JP_TOPICS = "https://mtg-jp.com/reading/topics/?q=&mainTag=&tag=69&p=";
+const MTG_JP_COMMANDFEST = "https://mtg-jp.com/events/detail/0000042/";
 const MAX_HTML_BYTES = 3 * 1024 * 1024;
 const MAX_SCRIPT_BYTES = 8 * 1024 * 1024;
 
@@ -19,8 +20,6 @@ interface DiscoveryConfig {
   hareruya_search_terms: string[];
   include_terms: string[];
   exclude_terms: string[];
-  mtg_jp_topic_pages: number;
-  article_max_age_days: number;
   players_convention_url: string;
 }
 
@@ -91,10 +90,23 @@ export function eventDateKey(text: string): string | null {
 
 export function upcomingEvents(events: EventInfo[], todayKey = jstDateKey()): EventInfo[] {
   return events.filter((event) => {
-    if (event.kind !== "event") return true;
-    const date = eventDateKey(event.dateText);
-    return date === null || date >= todayKey;
+    // An article's publication date is not an event date. Undated announcements
+    // cannot safely be included in a future-events digest.
+    if (event.kind !== "event") return false;
+    const date = eventEndDateKey(event.dateText);
+    return date !== null && date >= todayKey;
   });
+}
+
+function eventEndDateKey(text: string): string | null {
+  const start = eventDateKey(text);
+  if (!start) return null;
+  const range = /20\d{2}年\s*\d{1,2}月\s*\d{1,2}日(?:[（(][^）)]*[）)])?\s*[-～〜~]\s*(?:(20\d{2})年)?(?:(\d{1,2})月)?(\d{1,2})日/u.exec(text);
+  if (!range) return start;
+  const month = Number(range[2] ?? start.slice(5, 7));
+  const year = Number(range[1] ?? Number(start.slice(0, 4)) + (month < Number(start.slice(5, 7)) ? 1 : 0));
+  const end = eventDateKey(`${year}-${month}-${range[3]}`);
+  return end && end >= start ? end : start;
 }
 
 export function deduplicate(events: EventInfo[]): EventInfo[] {
@@ -110,14 +122,14 @@ export function deduplicate(events: EventInfo[]): EventInfo[] {
     if (!unique.has(key)) unique.set(key, event);
   }
   return [...unique.values()].sort((left, right) =>
-    `${left.dateText}\u001f${left.title}`.localeCompare(`${right.dateText}\u001f${right.title}`, "ja"),
+    `${eventDateKey(left.dateText) ?? ""}\u001f${left.title}`.localeCompare(`${eventDateKey(right.dateText) ?? ""}\u001f${right.title}`, "ja"),
   );
 }
 
 export async function discoverAll(): Promise<DiscoveryResult> {
   const sources = [
     ["晴れる屋", () => discoverHareruya(config)],
-    ["マジック日本公式", () => discoverMtgJp(config)],
+    ["マジック日本公式", () => discoverMtgJp()],
     ["プレイヤーズコンベンション", () => discoverPlayersConvention(config)],
   ] as const;
   const results = await Promise.allSettled(sources.map(([, discover]) => discover()));
@@ -164,25 +176,26 @@ async function discoverHareruya(activeConfig: DiscoveryConfig): Promise<EventInf
   return events;
 }
 
-async function discoverMtgJp(activeConfig: DiscoveryConfig): Promise<EventInfo[]> {
-  const pages = await Promise.all(
-    Array.from({ length: activeConfig.mtg_jp_topic_pages }, (_, page) => {
-      const url = `${MTG_JP_TOPICS}${page * 20}`;
-      return fetchText(url, MAX_HTML_BYTES).then((document) => ({ url, document }));
-    }),
-  );
-  const cutoff = new Date(`${jstDateKey()}T00:00:00Z`);
-  cutoff.setUTCDate(cutoff.getUTCDate() - activeConfig.article_max_age_days);
-  const cutoffKey = cutoff.toISOString().slice(0, 10);
+async function discoverMtgJp(): Promise<EventInfo[]> {
+  return parseOfficialCommandFest(await fetchText(MTG_JP_COMMANDFEST, MAX_HTML_BYTES));
+}
+
+export function parseOfficialCommandFest(document: string): EventInfo[] {
+  // This is the Japanese official event schedule, not the dated news feed.
+  // It remains relevant even if an event was announced many months ago.
+  const section = /<div\b[^>]*class=["'][^"']*\bevent-dates\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/iu.exec(document)?.[1];
+  if (!section) throw new Error("Official CommandFest schedule markup changed");
+  const text = normalize(stripTags(section));
   const events: EventInfo[] = [];
-  for (const { url, document } of pages) {
-    for (const link of parseLinks(document, url)) {
-      if (!/\/reading\/.+\/\d{7}\/?$/u.test(link.url) || !accepted(link.text, activeConfig)) continue;
-      const published = publicationDate(link.text);
-      if (published && published < cutoffKey) continue;
-      const title = normalize(link.text.replace(/^20\d{2}[.]\s*\d{1,2}[.]\s*\d{1,2}\s+\S+\s+/u, ""));
-      events.push({ title, url: link.url, source: "マジック日本公式", dateText: published ?? "", location: "", kind: "announcement" });
-    }
+  let year = "";
+  for (const match of text.matchAll(/(?:(20\d{2})年)?(\d{1,2})月(\d{1,2})日(?:[（(][^）)]*[）)])?\s*([^、,;]+?)(?=\s*(?:[、,;]|$))/gu)) {
+    year = match[1] ?? year;
+    if (!year) continue;
+    const dateText = `${year}年${match[2]}月${match[3]}日`;
+    const location = normalize(match[4]!);
+    if (!eventDateKey(dateText) || !location || /[～〜~\d]/u.test(location)) continue;
+    events.push({ title: `コマンドフェスト${year} ${location}`, url: MTG_JP_COMMANDFEST,
+      source: "マジック日本公式", dateText, location, kind: "event" });
   }
   return events;
 }
@@ -220,11 +233,7 @@ async function fetchText(url: string, maxBytes: number): Promise<string> {
     signal: AbortSignal.timeout(25_000),
   });
   if (!response.ok) throw new HttpError(response.status, url);
-  const declaredLength = Number(response.headers.get("content-length") ?? 0);
-  if (declaredLength > maxBytes) throw new Error(`response too large (${new URL(url).hostname})`);
-  const text = await response.text();
-  if (new TextEncoder().encode(text).byteLength > maxBytes) throw new Error(`response too large (${new URL(url).hostname})`);
-  return text;
+  return readLimitedText(response, maxBytes);
 }
 
 class HttpError extends Error {
@@ -240,11 +249,6 @@ function fromFirstIncludeTerm(text: string, activeConfig: DiscoveryConfig): stri
     .map((term) => folded.indexOf(term.toLocaleLowerCase("ja")))
     .filter((position) => position >= 0);
   return positions.length > 0 ? normalize(normalized.slice(Math.min(...positions))) : normalized;
-}
-
-function publicationDate(text: string): string | null {
-  const match = /(20\d{2})[.]\s*(\d{1,2})[.]\s*(\d{1,2})/u.exec(text);
-  return match ? eventDateKey(`${match[1]}-${match[2]}-${match[3]}`) : null;
 }
 
 function jstDateKey(now = new Date()): string {

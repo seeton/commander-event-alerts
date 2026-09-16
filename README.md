@@ -33,7 +33,7 @@ https://commander-event-alerts.asaiwing1104.workers.dev/
 - **Cloudflare Workers**: 購読フォーム、月次Cron、イベント取得
 - **Buttondown**: 二重確認、購読者、配信停止状態、月次メールを管理
 
-メールアドレスは公開リポジトリやCloudflareへ保存しません。Buttondownは独自ドメインなしでも共用送信基盤を利用でき、最初の100人は無料です。月ごとの一意なメール名で二重送信も防ぎます。
+メールアドレスは公開リポジトリやCloudflareへ保存しません。Buttondownは独自ドメインなしでも共用送信基盤を利用でき、[最初の100購読者は無料](https://buttondown.com/pricing)です。月ごとのメールID・配信状態とAPIの冪等キーを確認し、二重送信を防ぎます。下書き作成後に通信が失敗しても、同じ下書きから再開します。
 
 ```text
 購読フォーム → Buttondown → 確認メール
@@ -57,18 +57,24 @@ npm run dev
 
 | Secret | 用途 |
 |---|---|
-| `BUTTONDOWN_API_KEY` | 月次メールの作成と配信 |
+| `BUTTONDOWN_API_KEY` | 月次メールの閲覧・作成・配信（Emails: Read & write / Sending: Enabled。他権限はNone） |
 | `ADMIN_TOKEN` | 手動プレビュー・配信APIの保護 |
 
 購読フォームはButtondownへ直接送信されるため、Workerはメールアドレスを受け取りません。Buttondownの公開ユーザー名は `wrangler.jsonc` の通常変数です。`SERVICE_ENABLED` が `false` の間は、フォームとCron配信が停止します。
 
+公開前にButtondownの管理者メール確認、購読者の確認メール、テスト配信・配信停止を検証し、`SERVICE_ENABLED` を `true` にしてデプロイします。管理用の手動配信APIは、公開前のテストにも使うため、このフラグとは独立しています。
+
+同月メールをButtondownから削除・改名したり、APIキーを変更したりすると重複防止の前提が変わります。手動配信の前には履歴を確認してください。抑止・失敗など不確定な状態は自動再送せず、管理者が確認します。
+
 ## 情報元
 
 - [晴れる屋イベント検索](https://www.hareruyamtg.com/ja/events/list)
-- [マジック：ザ・ギャザリング日本公式](https://mtg-jp.com/)
+- [マジック日本公式・コマンドフェスト開催日程](https://mtg-jp.com/events/detail/0000042/)
 - [プレイヤーズコンベンション公式](https://ssl.bigmagic.net/players_convention/)
 
 情報元ごとに独立して取得し、一部が一時停止しても残りの情報を利用します。すべての情報元に失敗した場合は配信しません。
+
+開催日の分からない告知や記事の掲載日は、開催予定イベントとして配信しません。公式の開催日程ページは、告知の古さに関係なく毎月確認します。
 
 ## 制約と免責
 
