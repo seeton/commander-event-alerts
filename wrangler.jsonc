@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "commander-event-alerts",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-09-16",
+  "workers_dev": true,
+  "vars": {
+    "APP_NAME": "統率者大型大会アラート",
+    "SERVICE_ENABLED": "false",
+    "BUTTONDOWN_USERNAME": ""
+  },
+  "triggers": {
+    "crons": ["15 0 1 * *"]
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.05
+    }
+  }
+}

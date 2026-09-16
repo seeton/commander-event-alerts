@@ -3,88 +3,64 @@
 [![Test](https://github.com/seeton/commander-event-alerts/actions/workflows/test.yml/badge.svg)](https://github.com/seeton/commander-event-alerts/actions/workflows/test.yml)
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-日本国内の**大規模な統率者イベントだけ**を毎月1日にチェックし、その時点で開催前のイベントをメールで知らせる GitHub Actions です。
+日本国内の**大規模な統率者イベントだけ**を、月初にメールで知らせる購読サービスです。利用者はGitHubの設定やリポジトリ作成をせず、フォームへメールアドレスを入力するだけで購読できます。
 
-[このテンプレートから自分用のリポジトリを作る](https://github.com/seeton/commander-event-alerts/generate)
+**公開ページ（現在は購読受付の準備中）:**
 
-![通知メールのサンプル](docs/images/mail-preview.png)
+https://commander-event-alerts.asaiwing1104.workers.dev/
 
 ## 通知するイベント
-
-イベント名から大規模開催と判断できるものに限定しています。
 
 - コマンドフェスト / CommandFest
 - コマンダーサミット / コマサミ / コマサミサーガ
 - プレイヤーズコンベンションのコマンドゾーン / Command Zone
 
-毎週の店舗イベント、コマンダー交流会、コマンダー・パーティー、開催後のレポートは通知しません。
+毎週の店舗イベント、一般的な交流会、コマンダー・パーティー、開催後のレポートは対象外です。
 
-通知は「新しく見つけたときの1回だけ」ではありません。開催前であれば月初ごとに同じイベントを再通知します。例えば10月10日のイベントが8月に発表済みなら、8月・9月・10月の月初に届きます。
+通知は新着時の1回だけではありません。開催前なら月初ごとに同じイベントを再通知します。例えば10月10日のイベントが8月に発表済みなら、8月・9月・10月の月初メールに掲載されます。
 
-## 料金
+## 利用者向けの流れ
 
-個人利用なら基本的に無料です。
+1. 公開ページでメールアドレスを入力する
+2. 届いた確認メールのリンクを開く（二重確認）
+3. 毎月1日 09:15 JSTごろ、開催予定イベントの一覧が届く
+4. 不要になったら、各メール末尾の専用リンクで配信停止する
 
-- GitHub Actions: PrivateリポジトリでもGitHub Freeの無料利用枠内で十分に動かせます
-- Resend: Freeプランは月3,000通・1日100通までです
+メールアドレスや配信用APIキーをGitHubへ入力する必要はありません。
 
-料金や上限は変更されることがあります。最新情報は [GitHub Actionsの料金](https://docs.github.com/en/billing/concepts/product-billing/github-actions) と [Resendの料金](https://resend.com/pricing) を確認してください。
+## 構成
 
-## セットアップ
+- **Cloudflare Workers**: 購読フォーム、月次Cron、イベント取得
+- **Buttondown**: 二重確認、購読者、配信停止状態、月次メールを管理
 
-### 1. 自分用のリポジトリを作る
+メールアドレスは公開リポジトリやCloudflareへ保存しません。Buttondownは独自ドメインなしでも共用送信基盤を利用でき、最初の100人は無料です。月ごとの一意なメール名で二重送信も防ぎます。
 
-上部の **Use this template**、または[このリンク](https://github.com/seeton/commander-event-alerts/generate)からリポジトリを作ります。
+```text
+購読フォーム → Buttondown → 確認メール
 
-通知専用なら **Private** がおすすめです。Privateでもこの処理量なら通常はGitHub Actionsの無料枠内に収まります。また、公開リポジトリでは[60日間活動がないと定期実行が自動停止される](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows)ことがあります。
+Cloudflare Cron → 公式ページを確認 → 開催前イベント → Buttondown配信
+```
 
-### 2. ResendのAPIキーを作る
+## 開発
 
-個人メールのSMTPアカウントは使いません。通知専用の [Resend](https://resend.com/) APIを利用します。
-
-1. 通知を受け取りたいメールアドレスでResendに登録する
-2. Resendの **API Keys** から送信専用のAPIキーを作る
-3. `re_` で始まるAPIキーを、安全な場所に一時保存する
-
-独自ドメインを登録しない場合、`onboarding@resend.dev` から送信できるのは**Resendアカウント本人のメールアドレスだけ**です。そのため、Resendの登録アドレスと通知先は同じものを使ってください。これは[Resend公式の制限](https://resend.com/docs/knowledge-base/403-error-resend-dev-domain)です。
-
-### 3. GitHub Secretsを登録する
-
-自分用リポジトリの **Settings → Secrets and variables → Actions → New repository secret** で、次の2つを登録します。
-
-| Secret | 値 |
-|---|---|
-| `RESEND_API_KEY` | `re_` で始まるResendのAPIキー |
-| `MAIL_TO` | Resendに登録したメールアドレス |
-
-独自ドメインをResendに追加した場合だけ、任意で `RESEND_FROM` も登録できます。
-
-| Optional secret | 値の例 |
-|---|---|
-| `RESEND_FROM` | `Commander Events <alert@example.com>` |
-
-メールアドレスとAPIキーは `config.json` やソースコードに書かないでください。Repository secretsに保存した値は、公開リポジトリでもリポジトリの画面やファイルには表示されません。ただしワークフローは実行時に値を利用できるため、信頼できないワークフロー変更を取り込まないでください。
-
-### 4. テストメールを送る
-
-1. GitHubの **Actions → Commander Event Alert** を開く
-2. Actionsが無効なら **I understand my workflows, go ahead and enable them** を押す
-3. **Run workflow** を開く
-4. **Send only a test email** をオンにして実行する
-5. テストメールが届いたら、同じ画面からオフのままもう一度実行する
-
-オフで実行すると、その時点で開催前の対象イベントをまとめてメールします。定期確認は毎月1日 09:15 JSTです。
-
-## 通知対象を変える
-
-[`config.json`](config.json) の `include_terms` と `exclude_terms` を編集します。`include_terms` は誤通知を防ぐため、イベントの固有名だけを入れるのがおすすめです。
-
-ローカルでメールを送らず、検出結果だけを確認できます。
+必要なものはNode.js 20以降とCloudflare Wranglerです。
 
 ```bash
-python3 src/commander_alert.py
-python3 -m unittest discover -s tests -v
+npm install
+npm run cf-typegen
+npm run typecheck
+npm test
+npm run dev
 ```
+
+本番用の秘密情報はCloudflare Workers Secretsへ登録します。`.dev.vars`、`.env`、ソースコード、Issueには書かないでください。
+
+| Secret | 用途 |
+|---|---|
+| `BUTTONDOWN_API_KEY` | 月次メールの作成と配信 |
+| `ADMIN_TOKEN` | 手動プレビュー・配信APIの保護 |
+
+購読フォームはButtondownへ直接送信されるため、Workerはメールアドレスを受け取りません。Buttondownの公開ユーザー名は `wrangler.jsonc` の通常変数です。`SERVICE_ENABLED` が `false` の間は、フォームとCron配信が停止します。
 
 ## 情報元
 
@@ -92,17 +68,16 @@ python3 -m unittest discover -s tests -v
 - [マジック：ザ・ギャザリング日本公式](https://mtg-jp.com/)
 - [プレイヤーズコンベンション公式](https://ssl.bigmagic.net/players_convention/)
 
-外部パッケージや有料APIは使わず、公開ページを取得して固有イベント名で絞り込み、開催日が過ぎたイベントを除外しています。メール送信だけResend APIを使います。
+情報元ごとに独立して取得し、一部が一時停止しても残りの情報を利用します。すべての情報元に失敗した場合は配信しません。
 
 ## 制約と免責
 
-- 本プロジェクトは非公式で、Wizards of the Coast、晴れる屋、BIG MAGIC、その他イベント主催者とは関係ありません
+- 本サービスは非公式で、Wizards of the Coast、晴れる屋、BIG MAGIC、その他イベント主催者とは関係ありません
 - 情報元サイトの変更、掲載表記、通信障害などにより、取得漏れや誤検出が発生する可能性があります
-- メールだけで参加可否を判断せず、必ずリンク先の公式情報を確認してください
-- GitHub Actionsの定期実行は遅延する場合があります
-- 公開リポジトリでは、[60日間活動がないとscheduled workflowが自動停止されます](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows)。個人用コピーはPrivateを推奨します
+- 開催日、会場、申込方法は、必ずリンク先の公式情報で確認してください
+- 利用料金や無料枠は各事業者の都合で変わる可能性があります
 
-不具合や対象イベントの提案は [Issues](https://github.com/seeton/commander-event-alerts/issues) へどうぞ。ただし、メールアドレスやAPIキーはIssueに書かないでください。
+不具合や対象イベントの提案は [Issues](https://github.com/seeton/commander-event-alerts/issues) へどうぞ。メールアドレスやAPIキーは書かないでください。
 
 ## ライセンス
 

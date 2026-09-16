@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        報告ありがとうございます。メールアドレス、Resend APIキー、GitHub Secretsは絶対に記載しないでください。
+        報告ありがとうございます。メールアドレス、Buttondown APIキー、Cloudflare Workers Secretsは絶対に記載しないでください。
   - type: dropdown
     id: problem
     attributes:
@@ -15,7 +15,8 @@ body:
       options:
         - 対象イベントが見つからない
         - 対象外イベントを検出した
-        - GitHub Actionsが失敗した
+        - 購読・確認・配信停止ができない
+        - 月次配信が届かない
         - メールが届かない
         - その他
     validations:
@@ -32,5 +33,5 @@ body:
     attributes:
       label: 確認
       options:
-        - label: メールアドレス、APIキー、GitHub Secretsを記載していません
+        - label: メールアドレス、APIキー、Cloudflare Workers Secretsを記載していません
           required: true

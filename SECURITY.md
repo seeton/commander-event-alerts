@@ -2,9 +2,9 @@
 
 ## Secrets
 
-`RESEND_API_KEY`、`MAIL_TO`、`RESEND_FROM` はGitHubのRepository secretsに保存してください。ソースコード、`config.json`、Issue、Pull Request、Actionsのログには書かないでください。
+`BUTTONDOWN_API_KEY` と `ADMIN_TOKEN` はCloudflare Workers Secretsに保存してください。ソースコード、`.dev.vars` のコミット、Issue、Pull Request、ログには書かないでください。
 
-APIキーを誤って公開した場合は、コミットから消すだけでは不十分です。Resendでそのキーを直ちに削除し、新しいキーを作成してください。
+秘密情報を誤って公開した場合は、コミットから消すだけでは不十分です。該当サービスで直ちに無効化し、新しい値へローテーションしてください。
 
 ## Reporting a vulnerability
 
