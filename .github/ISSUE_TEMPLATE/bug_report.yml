@@ -1,0 +1,36 @@
+name: 不具合報告
+description: イベントの取得漏れ、誤検出、実行エラーを報告する
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        報告ありがとうございます。メールアドレス、Resend APIキー、GitHub Secretsは絶対に記載しないでください。
+  - type: dropdown
+    id: problem
+    attributes:
+      label: 問題の種類
+      options:
+        - 対象イベントが見つからない
+        - 対象外イベントを検出した
+        - GitHub Actionsが失敗した
+        - メールが届かない
+        - その他
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: 詳細
+      description: イベント名、公開URL、エラーメッセージなど、秘密情報を除いた内容を書いてください。
+    validations:
+      required: true
+  - type: checkboxes
+    id: secrets
+    attributes:
+      label: 確認
+      options:
+        - label: メールアドレス、APIキー、GitHub Secretsを記載していません
+          required: true
