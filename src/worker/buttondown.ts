@@ -52,7 +52,10 @@ export async function sendMonthlyNewsletter(
   if (draft.status !== "draft") throw new Error("Monthly email needs manual review; refusing to resend");
   const published = emailRecord(await buttondownRequest(config.apiKey, `/emails/${encodeURIComponent(draft.id)}/publish`, {
     method: "POST",
-    idempotencyKey: await sha256Hex(`${config.apiKey}:publish:${draft.id}`),
+    // Publishing requires a JSON object even when no fields change. Version the
+    // key so a cached 422 from the old empty-body request is not replayed.
+    idempotencyKey: await sha256Hex(`${config.apiKey}:publish-v2:${draft.id}`),
+    body: {},
   }));
   if (!ACCEPTED_STATUSES.has(published.status)) throw new Error("Buttondown did not queue the monthly email");
   return { id: draft.id, duplicate: false };

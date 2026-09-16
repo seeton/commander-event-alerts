@@ -48,6 +48,8 @@ describe("monthly delivery recovery", () => {
     expect(JSON.parse(create.body).status).toBe("draft");
     expect(create.headers["X-Idempotency-Key"]).toHaveLength(64);
     expect(publish.headers["X-Idempotency-Key"]).not.toBe(create.headers["X-Idempotency-Key"]);
+    expect(publish.headers["Content-Type"]).toBe("application/json");
+    expect(publish.body).toBe("{}");
     expect(fetcher.mock.calls[3]![0]).toMatch(/\/emails\/email-test\/publish$/u);
   });
 
