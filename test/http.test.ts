@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readLimitedText } from "../src/worker/http";
+import { readLimitedText } from "../src/http";
 
 describe("bounded response reader", () => {
   it("decodes split multibyte characters", async () => {

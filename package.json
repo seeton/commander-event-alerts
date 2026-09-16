@@ -1,21 +1,18 @@
 {
   "name": "commander-event-alerts",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
-    "cf-typegen": "wrangler types",
+    "monthly": "tsx src/cli.ts",
+    "preview": "tsx src/cli.ts preview",
     "typecheck": "tsc --noEmit",
-    "pretest": "wrangler deploy --dry-run --outdir .wrangler/test-build",
     "test": "vitest run"
   },
   "devDependencies": {
     "@types/node": "latest",
-    "miniflare": "^5.20260915.0-alpha",
+    "tsx": "^4.20.6",
     "typescript": "latest",
-    "vitest": "latest",
-    "wrangler": "latest"
+    "vitest": "latest"
   }
 }

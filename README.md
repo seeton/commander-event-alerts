@@ -1,111 +1,95 @@
 # Commander Event Alerts
 
 [![Test](https://github.com/seeton/commander-event-alerts/actions/workflows/test.yml/badge.svg)](https://github.com/seeton/commander-event-alerts/actions/workflows/test.yml)
-[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-日本国内の**大規模な統率者イベントだけ**を、月初にメールで知らせる購読サービスです。利用者はGitHubの設定やリポジトリ作成をせず、フォームへメールアドレスを入力するだけで購読できます。
+日本国内の大規模な統率者イベントだけを、月初にメールで知らせるサービスです。
 
-**公開ページ（XREAへの移行・送信認証・実送信テスト完了までは購読受付停止）:**
+**公開準備中：Buttondownのアカウント審査待ち。自動配信は無効です。**
 
-https://commander-event-alerts.asaiwing1104.workers.dev/
+購読ページ（承認後に利用可能）: https://buttondown.com/commander-events-jp
 
-運営環境ではD1と暗号化SMTP Secretを設定し、Worker経由の運営者向けテスト送信をXREAが受け付けるところまで確認済みです。DNS管理権限の確認とDKIM/DMARC設定、受信・購読・解除の実地検証が残っているため、公開受付と月次配信はまだ無効です。
+利用者はGitHubアカウントやAPIキーを用意する必要はありません。
 
-## 通知するイベント
+## 構成は2つだけ
+
+- **GitHub Actions**: 毎月1日09:15 JSTごろに公式イベント情報を取得し、Buttondownへ配信を指示
+- **Buttondown**: 標準の購読ページ、購読確認、メール配送、解除、配信履歴
+
+Google Forms、Cloudflare Workers/D1、自作SMTP、独自ドメインは使いません。送信元はButtondown標準ドメインを使います。購読者アドレスはButtondownだけで管理し、GitHubへ取り込みません。
+
+## 対象と配信ルール
 
 - コマンドフェスト / CommandFest
 - コマンダーサミット / コマサミ / コマサミサーガ
 - プレイヤーズコンベンションのコマンドゾーン / Command Zone
 
-毎週の店舗イベント、一般的な交流会、コマンダー・パーティー、開催後のレポートは対象外です。
+毎週の店舗イベント、一般交流会、コマンダー・パーティー、開催後のレポートは除外します。
 
-通知は新着時の1回だけではありません。開催前なら月初ごとに同じイベントを再通知します。例えば10月10日のイベントが8月に発表済みなら、8月・9月・10月の月初メールに掲載されます。
+開催前なら月初ごとに繰り返し掲載します。10月10日のイベントが8月に判明していれば、8月・9月・10月のメールに掲載します。開催日不明の告知は含めず、対象が0件なら送りません。
 
-## 利用者向けの流れ
+## 利用者の流れ
 
-1. 公開ページでメールアドレスを入力する
-2. 届いた確認メールのリンクを開き「購読を確定」を押す（二重確認・24時間有効）
-3. 毎月1日 09:15 JSTごろ、開催予定イベントの一覧が届く
-4. 不要になったら、各メール末尾の専用リンクで配信停止する
+1. Buttondownの購読ページにメールアドレスを入力
+2. 届いた確認メールから購読を確定
+3. 毎月初めに開催予定の一覧を受け取る
+4. メール末尾の解除リンクでいつでも停止
 
-メールアドレスや配信用APIキーをGitHubへ入力する必要はありません。
+## 開発と運用
 
-## 構成
+Node.js 24以降を使います。
 
-- **Cloudflare Workers + D1**: 購読フォーム、二重確認、配信停止、イベント取得、非公開の購読者・送信履歴
-- **GitHub Actions**: 毎月1日にWorkerの配信処理を順番に実行（宛先情報は取得しない）
-- **既存のXREAメール**: TLSで保護したSMTP認証を使い、1人ずつ配信
-
-メールアドレスはCloudflare D1内で管理し、公開リポジトリやGitHub Actionsのログには保存しません。送信元SMTPパスワードもCloudflare Secretだけに保存します。BCCではなく1人ずつ配信し、メールごとの専用配信停止リンクを付けます。解除時は稼働中DBからアドレスを削除します（プロバイダーのバックアップ・配送ログは別途保管期間があります）。
-
-```text
-購読フォーム → Worker / D1 → XREA → 確認メール
-
-月初のActions → Workerで月次一覧と宛先を確定 → 1人ずつXREAで送信
-```
-
-## 開発
-
-必要なものはNode.js 24以降とCloudflare Wranglerです。テストは1 workerで実行します。
-
-```bash
-npm install
-npm run cf-typegen
+```sh
+npm ci
 npm run typecheck
 npm test
-npm run dev
+npm run preview
 ```
 
-本番用の秘密情報はCloudflare Workers Secretsへ登録します。`.dev.vars`、`.env`、ソースコード、Issueには書かないでください。
+プレビューは公開イベント情報だけを読み、メール送信や購読者取得を行いません。APIキーも不要です。
 
-| Secret | 用途 |
-|---|---|
-| `SMTP_PASSWORD` | 既存XREAメールアカウントのパスワード（変更・再発行は不要） |
-| `TOKEN_SECRET` | 解除リンクと不正登録防止ハッシュの署名用。32文字以上のランダム値 |
-| `ADMIN_TOKEN` | 管理APIの保護。Actionsの `ALERTS_ADMIN_TOKEN` Secretにも同じ値を保存 |
-| `TEST_RECIPIENT` | 任意・一時的な運営者テスト宛先。検証後は削除 |
+GitHubリポジトリの **Settings → Secrets and variables → Actions** に設定します。
 
-`wrangler d1 create commander-event-alerts` でDBを作り、返されたIDを `wrangler.jsonc` の `DB` bindingに設定してから `wrangler d1 migrations apply commander-event-alerts --remote` を実行します。テストはローカルのD1を使い、実在する宛先への送信は行いません。
+| 種類 | 名前 | 内容 |
+|---|---|---|
+| Secret | `BUTTONDOWN_API_KEY` | EmailsのRead & writeとSendingのみ許可した既存キー |
+| Variable | `DELIVERY_ENABLED` | 承認・受信確認後だけ `true`。それまでは `false` |
 
-`SERVICE_ENABLED=false` の間は登録と送信を停止します。配信停止だけは常に利用できます。GitHubリポジトリ変数 `DELIVERY_ENABLED=true` も設定しない限りActionsは送信しません。公開前にSMTP認証、SPF/DKIM/DMARC、本人所有の宛先で受信・確認・停止を検証してください。旧Buttondownからの自動インポートは行いません。所有者を含め、XREA版で購読を確認する必要があります。
+APIキーはソース、Issue、ログに書かないでください。Subscribersの読み書き権限は不要です。
 
-### 送信と障害時の扱い
+「Monthly newsletter」の手動実行は3種類です。
 
-- `POST /api/admin/prepare`: 今月の本文と確認済み宛先を一度だけ確定。後からの登録は翌月から。
-- `POST /api/admin/send-next?month=YYYY-MM`: 未送信の1人分を取得・送信。現在のJST月だけを許可。
-- `GET /api/admin/status?month=YYYY-MM`: アドレスを含まない状態別件数。
-- `POST /api/admin/test-mail`: 公開停止中にも使える運営者向けSMTPテスト。宛先は一時Secret `TEST_RECIPIENT` のみで、リクエストから指定できません。購読登録や月次履歴は変更しません。テスト終了後にこのSecretを削除すると停止します。
-- 各APIは `Authorization: Bearer ...` が必要。GETプレビューは従来の `/api/admin/preview`。
-- SMTPは厳密な「必ず1回」を保証できません。DATA後に応答を失った場合や、送信後のDB更新に失敗した場合は `unknown` にして自動再送せず、XREAの配送状況とDBを手動照合します。
-- 処理中断で残った `sending` も2分後に `unknown` として停止。確認せず `pending` に戻さないでください。
-- 送信間隔は最低1.5秒。同月再実行では送信済みを飛ばします。Actionsは30分で停止し、次の実行へ履歴を引き継げます。失敗・不明がある月は要確認です。
-- 100人程度を想定。安全弁として月次対象200人超は自動配信を停止します。確認メールは全体50通/日、同一IP5回/時、同一アドレス1回/時を上限にしています。
-- バウンス通知は送信元メールで監視してください。恒久的な宛先不達はD1の購読状態を `bounced` に変更して停止し、原因確認まで再送しないでください。
-- 公開GitHubのスケジュールは遅延や長期無活動による無効化があり得ます。厳密な09:15到着保証はありません。
-- `TOKEN_SECRET` の変更は既存の解除リンクを無効化するので、通常運用では変更しないでください。
-- Cloudflareの毎日03:27 JSTのCronは期限切れデータの掃除専用です。メールは送りません。
+- `preview`（初期値）: 公開イベントの一覧を確認。送信しない
+- `check`: Buttondownとの接続と今月の配信状態を読取確認。メール作成・配信しない
+- `send`: 今月分を送信。`DELIVERY_ENABLED=true` が必要
 
-XREAの送信上限は送受信量や契約プランによる目安で、公開メルマガへの無制限利用を保証するものではありません。希望者の確認済み購読だけを扱い、通常使用量・サーバー負荷の範囲で運用します。
+審査中に配信を試したり、短時間に購読・解除を繰り返したりしないでください。承認後は確認済みの運営者宛てで受信を確かめてから公開します。すでに送った2026年9月分を再送する必要はありません。
 
-## 情報元
+### 二重送信と失敗時
+
+月ごとの固定slugとButtondown上の送信状態を使います。送信済み・送信待ちなら再送しません。同じ月の実行はActions側でも直列化します。API書込には冪等キーを付け、通信失敗を無条件でリトライしません。
+
+中断後に再実行すると既存下書きから再開します。paused、errored、suppressed等の状態は自動で解除・再送せず、運営者の確認で止まります。同月のメールを削除したりslugや件名を変えたりすると重複判定を妨げるので避けてください。
+
+一部の情報元が失敗した場合は成功した情報だけを利用し、失敗した情報元の名前をログに残します。全情報元が失敗した場合は配信しません。
+
+## 公開・費用について
+
+Buttondownは現行の案内では100購読者まで無料で、APIと標準の送信ドメインを使えます。追加の有料Forms機能は使わず、標準購読ページを利用します。100人を超える場合は料金を確認し、無断で有料プランへ切り替えません。
+
+- [Buttondown料金](https://buttondown.com/pricing)
+- [API](https://buttondown.com/features/api)
+- [アカウント審査](https://docs.buttondown.com/account-review)
+
+審査や再審査、迷惑メール判定はなくせません。GitHubの定期実行にも遅延があり、公開リポジトリは60日間活動がないとスケジュールが無効になる場合があります。Actionsの通知・実行履歴を定期確認してください。毎月のメール到着や無料条件の永続性を保証するものではありません。
+
+## 情報元・免責
 
 - [晴れる屋イベント検索](https://www.hareruyamtg.com/ja/events/list)
-- [マジック日本公式・コマンドフェスト開催日程](https://mtg-jp.com/events/detail/0000042/)
+- [マジック日本公式](https://mtg-jp.com/events/detail/0000042/)
 - [プレイヤーズコンベンション公式](https://ssl.bigmagic.net/players_convention/)
 
-情報元ごとに独立して取得し、一部が一時停止しても残りの情報を利用します。すべての情報元に失敗した場合は配信しません。
+主催者とは無関係の非公式サービスです。取得漏れや誤検出があり得ます。日程・会場・参加条件はリンク先の公式情報で確認してください。
 
-開催日の分からない告知や記事の掲載日は、開催予定イベントとして配信しません。公式の開催日程ページは、告知の古さに関係なく毎月確認します。
-
-## 制約と免責
-
-- 本サービスは非公式で、Wizards of the Coast、晴れる屋、BIG MAGIC、その他イベント主催者とは関係ありません
-- 情報元サイトの変更、掲載表記、通信障害などにより、取得漏れや誤検出が発生する可能性があります
-- 開催日、会場、申込方法は、必ずリンク先の公式情報で確認してください
-- 利用料金や無料枠は各事業者の都合で変わる可能性があります
-
-不具合や対象イベントの提案は [Issues](https://github.com/seeton/commander-event-alerts/issues) へどうぞ。メールアドレスやAPIキーは書かないでください。
-
-## ライセンス
+不具合・イベントの提案は[Issues](https://github.com/seeton/commander-event-alerts/issues)へ。メールアドレスやAPIキーは書かないでください。
 
 [MIT License](LICENSE)

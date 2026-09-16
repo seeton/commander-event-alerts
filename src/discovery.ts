@@ -1,4 +1,4 @@
-import rawConfig from "../../config.json";
+import rawConfig from "../config.json";
 import { readLimitedText } from "./http";
 
 const HARERUYA_SEARCH =

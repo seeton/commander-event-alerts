@@ -7,7 +7,7 @@ import {
   parseOfficialCommandFest,
   upcomingEvents,
   type EventInfo,
-} from "../src/worker/discovery";
+} from "../src/discovery";
 
 const classifier = {
   include_terms: ["コマンドフェスト", "コマンダーサミット", "コマンドゾーン"],

@@ -3,6 +3,12 @@ on:
   schedule:
     - cron: '15 0 1 * *' # 09:15 JST on the first day of each month
   workflow_dispatch:
+    inputs:
+      mode:
+        description: 'preview: public event data only; check: read-only API check; send: deliver this month'
+        type: choice
+        options: [preview, check, send]
+        default: preview
 permissions:
   contents: read
 concurrency:
@@ -10,15 +16,18 @@ concurrency:
   cancel-in-progress: false
 jobs:
   deliver:
-    if: vars.DELIVERY_ENABLED == 'true'
+    if: github.event_name == 'workflow_dispatch' || vars.DELIVERY_ENABLED == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
-      - run: node scripts/monthly.mjs
+          cache: npm
+      - run: npm ci
+      - run: npm run monthly -- "$RUN_MODE"
         env:
-          ALERTS_ORIGIN: https://commander-event-alerts.asaiwing1104.workers.dev
-          ALERTS_ADMIN_TOKEN: ${{ secrets.ALERTS_ADMIN_TOKEN }}
+          RUN_MODE: ${{ github.event_name == 'schedule' && 'send' || inputs.mode }}
+          DELIVERY_ENABLED: ${{ vars.DELIVERY_ENABLED }}
+          BUTTONDOWN_API_KEY: ${{ secrets.BUTTONDOWN_API_KEY }}
