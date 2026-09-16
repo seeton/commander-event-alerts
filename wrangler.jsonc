@@ -13,7 +13,7 @@
     "SMTP_USER": "info@setn.shop",
     "SMTP_FROM": "info@setn.shop"
   },
-  "d1_databases": [{"binding":"DB", "database_name":"commander-event-alerts", "migrations_dir":"migrations"}],
+  "d1_databases": [{"binding":"DB", "database_name":"commander-event-alerts", "database_id":"14df0b19-1296-4d99-bb66-1921b8daeefc", "migrations_dir":"migrations"}],
   "triggers": {"crons":["27 18 * * *"]},
   "observability": {
     "enabled": true,

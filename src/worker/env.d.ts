@@ -3,5 +3,6 @@ declare namespace Cloudflare {
     SMTP_PASSWORD: string;
     TOKEN_SECRET: string;
     ADMIN_TOKEN: string;
+    TEST_RECIPIENT?: string;
   }
 }

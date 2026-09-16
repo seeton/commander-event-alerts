@@ -2,7 +2,7 @@ import { connect } from 'cloudflare:sockets';
 import { discoverAll } from './discovery';
 import { landingPage, privacyPage, messagePage } from './pages';
 import { constantTimeEqual } from './security';
-import { sendSmtp, type SendMail, SmtpError } from './smtp';
+import { sendSmtp, type SendMail, SmtpError, validEmail } from './smtp';
 import { cleanup, subscribe, confirmSubscription, unsubscribe } from './subscriptions';
 import { campaignStatus, jstMonthKey, prepareCampaign, sendNext } from './newsletter';
 import { readLimitedText } from './http';
@@ -29,6 +29,19 @@ export default {
         const secret = env.ADMIN_TOKEN?.trim();
         const supplied = request.headers.get('authorization')?.replace(/^Bearer /u,'') ?? '';
         if (!secret || !supplied || !(await constantTimeEqual(supplied,secret))) return json({message:'Unauthorized'},401);
+        // Operator-only smoke test while public registration remains paused.
+        // The recipient is a temporary Secret, never request input or a response field.
+        if (request.method==='POST' && url.pathname==='/api/admin/test-mail') {
+          if (!env.SMTP_PASSWORD || !env.TEST_RECIPIENT || !validEmail(env.TEST_RECIPIENT)) return json({status:'test_disabled'},503);
+          try {
+            await mailer(env)({to:env.TEST_RECIPIENT,subject:`【送信テスト】${env.APP_NAME}`,
+              text:'これは運営者が実行した送信テストです。Cloudflare WorkersからXREAの暗号化SMTP接続を使い、1通ずつ送信しています。\n\nこのテストでは購読登録や月次メール配信は行いません。',
+              messageId:`smtp-test-${crypto.randomUUID()}`});
+            return json({status:'accepted'});
+          } catch (error) {
+            return json({status:'test_failed',code:error instanceof SmtpError ? error.code : 'request_failed',uncertain:error instanceof SmtpError && error.uncertain},502);
+          }
+        }
         if (request.method==='GET' && url.pathname==='/api/admin/preview') return json(await discoverAll());
         if (request.method==='GET' && url.pathname==='/api/admin/status') {
           const month=url.searchParams.get('month') ?? jstMonthKey(new Date());

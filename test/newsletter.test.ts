@@ -109,6 +109,12 @@ describe('real Workers HTTP handlers',()=>{
     const response=await mf.dispatchFetch(`${origin}/api/admin/status`);
     expect(response.status).toBe(401);
   });
+  it('protects the operator test and disables it without an explicitly configured recipient',async()=>{
+    expect((await mf.dispatchFetch(`${origin}/api/admin/test-mail`,{method:'POST'})).status).toBe(401);
+    const response=await mf.dispatchFetch(`${origin}/api/admin/test-mail`,{method:'POST',headers:{authorization:'Bearer test-admin'}});
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({status:'test_disabled'});
+  });
   it('rejects cross-site subscription requests before any SMTP send',async()=>{
     const response=await mf.dispatchFetch(`${origin}/api/subscribe`,{method:'POST',headers:{origin:'https://evil.example','content-type':'application/x-www-form-urlencoded'},body:'email=reader%40example.com'});
     expect(response.status).toBe(403);

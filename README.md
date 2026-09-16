@@ -9,6 +9,8 @@
 
 https://commander-event-alerts.asaiwing1104.workers.dev/
 
+運営環境ではD1と暗号化SMTP Secretを設定し、Worker経由の運営者向けテスト送信をXREAが受け付けるところまで確認済みです。DNS管理権限の確認とDKIM/DMARC設定、受信・購読・解除の実地検証が残っているため、公開受付と月次配信はまだ無効です。
+
 ## 通知するイベント
 
 - コマンドフェスト / CommandFest
@@ -61,6 +63,7 @@ npm run dev
 | `SMTP_PASSWORD` | 既存XREAメールアカウントのパスワード（変更・再発行は不要） |
 | `TOKEN_SECRET` | 解除リンクと不正登録防止ハッシュの署名用。32文字以上のランダム値 |
 | `ADMIN_TOKEN` | 管理APIの保護。Actionsの `ALERTS_ADMIN_TOKEN` Secretにも同じ値を保存 |
+| `TEST_RECIPIENT` | 任意・一時的な運営者テスト宛先。検証後は削除 |
 
 `wrangler d1 create commander-event-alerts` でDBを作り、返されたIDを `wrangler.jsonc` の `DB` bindingに設定してから `wrangler d1 migrations apply commander-event-alerts --remote` を実行します。テストはローカルのD1を使い、実在する宛先への送信は行いません。
 
@@ -71,6 +74,7 @@ npm run dev
 - `POST /api/admin/prepare`: 今月の本文と確認済み宛先を一度だけ確定。後からの登録は翌月から。
 - `POST /api/admin/send-next?month=YYYY-MM`: 未送信の1人分を取得・送信。現在のJST月だけを許可。
 - `GET /api/admin/status?month=YYYY-MM`: アドレスを含まない状態別件数。
+- `POST /api/admin/test-mail`: 公開停止中にも使える運営者向けSMTPテスト。宛先は一時Secret `TEST_RECIPIENT` のみで、リクエストから指定できません。購読登録や月次履歴は変更しません。テスト終了後にこのSecretを削除すると停止します。
 - 各APIは `Authorization: Bearer ...` が必要。GETプレビューは従来の `/api/admin/preview`。
 - SMTPは厳密な「必ず1回」を保証できません。DATA後に応答を失った場合や、送信後のDB更新に失敗した場合は `unknown` にして自動再送せず、XREAの配送状況とDBを手動照合します。
 - 処理中断で残った `sending` も2分後に `unknown` として停止。確認せず `pending` に戻さないでください。
